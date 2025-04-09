@@ -37,19 +37,24 @@ public:
         int send_current = 0;
         int max_current = 0;
         pid_gain gain;
+        float last_error = 0;
+        float integral = 0;
+        bool stop = false;
     } robomas_data;
 
-    int get_counts(int id);
-    int get_rpm(int id);
-    int get_current(int id);
-    float get_position(int id);
+    int get_counts(int id);     // -> 0~8192 <=> 0~360deg
+    int get_rpm(int id);        // -> rotate / minuite
+    int get_current(int id);    // -> milliampere
+    float get_position(int id); // -> 1 rotate = 1.0
+    // after setting control type, we have to set new target
     void set_control_type(int id, robomas_control_type control_type);
-    void set_max_current(int id, int current);
-    void reset_offset(int id);
-    void send_data();
-    void set_gain(int id, pid_gain gain);
-    void set_target(int id, float target);
-    void calculate_pid();
+    void set_max_current(int id, int current);  // current : milliampere
+    void reset_offset(int id);  // reset offset of position
+    void send_data();           // send all data to canbus
+    void set_gain(int id, pid_gain gain);   // after setting gain, we have to set new target
+    void set_target(int id, float target);  // pid target
+    void calculate_pid(int dt); // dt : millisecond
+    void reset_pid(int id);     // reset pid integral and last_error
 
 
 private:

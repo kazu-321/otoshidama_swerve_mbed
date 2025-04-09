@@ -57,6 +57,7 @@ float robomas::get_position(int id) {
 
 void robomas::set_control_type(int id, robomas_control_type control_type) {
     bus[id].control_type = control_type;
+    bus[id].stop = true;
 }
 
 void robomas::set_max_current(int id, int current) {
@@ -74,7 +75,9 @@ void robomas::send_data() {
         uint16_t current = min(max( bus[id].send_current,
                                    -bus[id].max_current),
                                     bus[id].max_current);
-
+        if(bus[id].stop) {
+            current = 0;
+        }
         send_message.data[id*2] = (current >> 8) & 0xFF;
         send_message.data[id*2+1] = current & 0xFF;
     }
@@ -83,12 +86,39 @@ void robomas::send_data() {
 
 void robomas::set_gain(int id, pid_gain gain) {
     bus[id].gain = gain;
+    bus[id].stop = true;
 }
 
 void robomas::set_target(int id, float target) {
     bus[id].target = target;
+    bus[id].stop = false;
 }
 
-void robomas::calculate_pid() {
-    
+void robomas::calculate_pid(int dt) {
+    if(dt <= 0.0f) {
+        return;
+    }
+    float error = 0;
+    for(int id = 0; id < 4; id++) {
+        if(bus[id].control_type == robomas_control_type::current) {
+            error = bus[id].target - bus[id].current;
+        } else if(bus[id].control_type == robomas_control_type::speed) {
+            error = bus[id].target - bus[id].rpm;
+        } else if(bus[id].control_type == robomas_control_type::position) {
+            error = bus[id].target - bus[id].position;
+        } else {
+            return;
+        }
+        bus[id].integral += error * dt;
+        float derivative = (error - bus[id].last_error) / dt;
+        bus[id].last_error = error;
+        bus[id].send_current =  bus[id].gain.p * error +
+                                bus[id].gain.i * bus[id].integral +
+                                bus[id].gain.d * derivative;
+    }
+}
+
+void robomas::reset_pid(int id) {
+    bus[id].last_error = 0;
+    bus[id].integral = 0;
 }
