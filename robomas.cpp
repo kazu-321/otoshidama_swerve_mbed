@@ -1,29 +1,31 @@
 #include "robomas.h"
 
 robomas::robomas(PinName RD, PinName TD) : canbus(RD, TD, 1000000) {
-    recieve_th.start(callback(this,&robomas::recieve_loop));
-    canbus.attach(callback(this,&robomas::recieve_irq), CAN::RxIrq);
+    receive_th.start(callback(this,&robomas::receive_loop));
+    canbus.attach(callback(this,&robomas::receive_irq), CAN::RxIrq);
 }
 
-void robomas::recieve_loop() {
+void robomas::receive_loop() {
     while(true) {
         while(!queue.empty()) {
-            CANMessage recieve_message;
-            queue.pop(recieve_message);
-            int id = recieve_message.id - 0x201;
-            unsigned char data[8];
+            CANMessage receive_message;
+            queue.pop(receive_message);
+            int id = receive_message.id - 0x201;
             if(0 <= id && id < 4) {
-                bus[id].counts_now  = uint16_t( (data[0] << 8 ) | data[1] );
-                bus[id].rpm         =  int16_t( (data[2] << 8 ) | data[3] );
-                bus[id].current     =  int16_t( (data[4] << 8 ) | data[5] );
+                bus[id].counts_now  = uint16_t((receive_message.data[0] << 8 ) | 
+                                                receive_message.data[1] );
+                bus[id].rpm         =  int16_t((receive_message.data[2] << 8 ) | 
+                                                receive_message.data[3] );
+                bus[id].current     =  int16_t((receive_message.data[4] << 8 ) | 
+                                                receive_message.data[5] );
                 if(bus[id].counts_last == -1) {
                     bus[id].counts_last = bus[id].counts_now;
                 }
                 int delta_counts = bus[id].counts_last - bus[id].counts_now;
-                while(delta_counts >   ppr/2) {
+                if(delta_counts >  ppr/2) {
                     bus[id].position_counts++;
                 }
-                while(delta_counts < - ppr/2) {
+                if(delta_counts < -ppr/2) {
                     bus[id].position_counts--;
                 }
                 bus[id].counts_last =  bus[id].counts_now;
@@ -32,10 +34,10 @@ void robomas::recieve_loop() {
     }
 }
 
-void robomas::recieve_irq() {
-    CANMessage recieve_message;
-    if(canbus.read(recieve_message)) {
-        queue.push(recieve_message);
+void robomas::receive_irq() {
+    CANMessage receive_message;
+    if(canbus.read(receive_message)) {
+        queue.push(receive_message);
     }
 }
 
@@ -52,7 +54,7 @@ int robomas::get_current(int id) {
 }
 
 float robomas::get_position(int id) {
-    return bus[id].position_counts + float( (bus[id].counts_now - bus[id].offset ) / ppr );
+    return bus[id].position_counts + float(bus[id].counts_now - bus[id].offset) / ppr;
 }
 
 void robomas::set_control_type(int id, robomas_control_type control_type) {

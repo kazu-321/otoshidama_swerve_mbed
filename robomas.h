@@ -21,7 +21,7 @@ public:
     } pid_gain;
 
     typedef struct robomas_data_s {
-        // recieve
+        // receive
         int counts_now = 0;
         int rpm = 0;
         int current = 0;
@@ -62,9 +62,9 @@ private:
     const int ppr = 8192;
     RawCAN canbus;
     CircularBuffer<CANMessage, 32> queue;
-    Thread recieve_th;
-    void recieve_loop();
-    void recieve_irq();
+    Thread receive_th;
+    void receive_loop();
+    void receive_irq();
 };
 
 
