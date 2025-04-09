@@ -14,13 +14,13 @@ public:
         position,
     } robomas_control_type;
     
-    typedef struct {
+    typedef struct pid_gain_s {
         float p = 1;
         float i = 0;
         float d = 0;
     } pid_gain;
 
-    typedef struct {
+    typedef struct robomas_data_s {
         // recieve
         int counts_now = 0;
         int rpm = 0;
@@ -39,7 +39,7 @@ public:
         pid_gain gain;
         float last_error = 0;
         float integral = 0;
-        bool stop = false;
+        bool stop = true;
     } robomas_data;
 
     int get_counts(int id);     // -> 0~8192 <=> 0~360deg
