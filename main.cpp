@@ -26,20 +26,20 @@ int main() {
             queue.pop(msg);
             printf("%d\n",msg.id);
             switch(msg.id) {
-                case 0x00:
+                case 0x000:
                     if(msg.len == 1) {
-                        memcpy(&canmsg.data, &msg.data, 8);
+                        memcpy(&canmsg.data, &msg.data, sizeof(canmsg.data));
                     }
                     break;
-                case 0x01:
+                case 0x001:
                     if(msg.len == 8) {
-                        memcpy(&canmsg.x, &msg.data[0], 4);
-                        memcpy(&canmsg.y, &msg.data[4], 4);
+                        memcpy(&canmsg.x, &msg.data[0], sizeof(float));
+                        memcpy(&canmsg.y, &msg.data[4], sizeof(float));
                     }
                     break;
-                case 0x02:
+                case 0x002:
                     if(msg.len == 4) {
-                        memcpy(&canmsg.z, &msg.data, 4);
+                        memcpy(&canmsg.z, &msg.data, sizeof(float));
                     }
                     break;
             }
