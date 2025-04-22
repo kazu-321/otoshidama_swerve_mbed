@@ -1,28 +1,8 @@
-#include "mbed.h"
-#include "robomaster.hpp"
+#include "main.hpp"
 
-robomaster robomas(PA_11,PA_12);
-Ticker pid_ticker;
-void calculate_pid();
-DigitalIn button(BUTTON1);
-DigitalIn interrupter[4] = {
-    PB_9,
-    PA_6,
-    PA_7,
-    PA_10
-};
-float initial_position[4] = {
-    4.843872,
-    0,
-    0,
-    0
-};
-void reset();
-bool is_resetting = false;
-int reset_rpm = 5000;
-const int delta_t = 10;
 
 int main() {
+    printf("start\n");
     for(int i = 0; i < 4 ; i++) {
         robomas.set_control_type(i  , robomaster::position);
         robomas.set_control_type(i+4, robomaster::speed   );
@@ -33,67 +13,127 @@ int main() {
         robomas.set_gain<robomaster::speed>   (i+4,{2.0, 1.8, 0.1});
     }
     pid_ticker.attach(&calculate_pid,chrono::milliseconds(delta_t));
+    can.attach(&can_receive, CAN::RxIrq);
 
-    reset();
+    for(int id = 0; id < 4; id++) {
+        robomas.set_target<robomaster::position>(id,0);
+    }
+
 
     while(true) {
+        if(!queue.empty()) {
+            CANMessage msg;
+            queue.pop(msg);
+            printf("%d\n",msg.id);
+            switch(msg.id) {
+                case 0x00:
+                    if(msg.len == 1) {
+                        memcpy(&canmsg.data, &msg.data, 8);
+                    }
+                    break;
+                case 0x01:
+                    if(msg.len == 8) {
+                        memcpy(&canmsg.x, &msg.data[0], 4);
+                        memcpy(&canmsg.y, &msg.data[4], 4);
+                    }
+                    break;
+                case 0x02:
+                    if(msg.len == 4) {
+                        memcpy(&canmsg.z, &msg.data, 4);
+                    }
+                    break;
+            }
+        }
+
+        // for(int i = 0; i < 4; i++) {
+        //     float angle_pos,rpm;
+        //     angle_pos = 0;
+        //     rpm = 0;
+        //     robomas.set_target<robomaster::position>(i  , angle_pos);
+        //     robomas.set_target<robomaster::speed>   (i+4, rpm);
+        //     printf("%3d ",(int)angle_pos*10);
+        // }
+        // printf("\n");
+
+        // if(!button) {
+        //     for(int id = 0; id < 8; id++) {
+        //         robomas.set_emg(id, true);
+        //     }
+        //     printf("%1.5f  %1.5f  %1.5f  %1.5f\n",
+        //         robomas.get_position(0),
+        //         robomas.get_position(1),
+        //         robomas.get_position(2),
+        //         robomas.get_position(3));
+        // } else {
+        //     for(int id = 0; id < 8; id++) {
+        //         robomas.set_emg(id, false);
+        //     }
+        // }
+        printf("emg: %d, reset: %d, x: %2.5f, y: %2.5f, z: %2.5f\n",
+            canmsg.data.emg,
+            canmsg.data.reset,
+            canmsg.x,
+            canmsg.y,
+            canmsg.z);
         robomas.send_current();
     }
 }
 
 void calculate_pid() {
-    if(is_resetting) {
-        for(int id = 0; id < 8; id++) {
-            robomas.calculate_pid(id, delta_t);
-        }
-    } else {
-        for(int id = 0; id < 4; id++){
-            robomas.calculate_rpm_pid(id, delta_t);
-            robomas.calculate_pid(id, delta_t);
-            robomas.set_target<robomaster::speed>(id+4,
-                robomas.get_robomaster_data(id).target_rpm +
-                robomas.get_robomaster_data(id+4).target_rpm
+    for(int i = 0; i < 4; i++){
+        if(is_resetting[i]) {
+            robomas.calculate_pid(i  , delta_t);
+            robomas.calculate_pid(i+4, delta_t);
+        } else {
+            robomas.calculate_rpm_pid(i, delta_t);
+            robomas.calculate_pid(i, delta_t);
+            robomas.set_target<robomaster::speed>(i+4,
+                robomas.get_rpm(i) +
+                robomas.get_robomaster_data(i+4).target_rpm
             );
-            robomas.calculate_pid(id+4,delta_t);
+            robomas.calculate_pid(i+4,delta_t);
         }
     }
-}
-
-int get_sum(int ptr[], int n) {
-    int sum = 0;
-    for(int i = 0; i < n; i++) {
-        sum += ptr[i];
-    }
-    return sum;
 }
 
 void reset() {
-    is_resetting = true;
-    for(int id = 0; id < 4; id++) {
-        robomas.set_control_type(id, robomaster::speed);
+    for(int i = 0; i < 4; i++) {
+        is_resetting[i] = true;
+        robomas.set_control_type(i, robomaster::speed);
     }
-    int flag[4] = {0};
     bool prev_interrupter[4];
     for(int i = 0; i < 4; i++) {
         prev_interrupter[i] = interrupter[i];
     }
-    while(get_sum(flag,4) != 4) {
-        for(int i = 0; i < 4; i++){
-            if(prev_interrupter[i] == true) {
-                robomas.set_target<robomaster::speed>(i,   reset_rpm);
-                robomas.set_target<robomaster::speed>(i+4, reset_rpm);
-                prev_interrupter[i] = interrupter[i];
-            } else {
-                robomas.set_target<robomaster::speed>(i,   -reset_rpm);
-                robomas.set_target<robomaster::speed>(i+4, -reset_rpm);
-                if(interrupter[i] == true) {
-                    flag[i] = 1;
-                    robomas.set_neutral(i,
-                        robomas.get_position(i)+initial_position[i]);
+    while( is_resetting[0] || is_resetting[1] || is_resetting[2] || is_resetting[3] ) { // all flag is true
+        for(int i = 0; i < 4; i++) {
+            if(is_resetting[i]){
+                if(prev_interrupter[i] == true) { // 1 -> 0
+                    robomas.set_target<robomaster::speed>(i,    reset_rpm);
+                    robomas.set_target<robomaster::speed>(i+4,  reset_rpm);
+                    prev_interrupter[i] = interrupter[i];
+                } else {    // 0
+                    robomas.set_target<robomaster::speed>(i,   -reset_rpm);
+                    robomas.set_target<robomaster::speed>(i+4, -reset_rpm);
+                    if(interrupter[i] == true) { // 0 -> 1
+                        robomas.set_neutral(i,
+                            robomas.get_position(i)+initial_position[i]);
+                        is_resetting[i] = false;
+                        robomas.set_control_type(i, robomaster::position);
+                    }
                 }
+            } else {
+                robomas.set_target<robomaster::position>(i,   0);
+                robomas.set_target<robomaster::speed>   (i+4, 0);
             }
         }
         robomas.send_current();
     }
-    is_resetting = false;
+}
+
+void can_receive() {
+    CANMessage msg;
+    if(can.read(msg)) {
+        queue.push(msg);
+    }
 }
