@@ -2,7 +2,7 @@
 
 
 int main() {
-    printf("start\n");
+    printf("otoshidama swerve start\n");
     for(int i = 0; i < 4 ; i++) {
         robomas.set_control_type(i  , robomaster::position);
         robomas.set_control_type(i+4, robomaster::speed   );
@@ -19,12 +19,12 @@ int main() {
         robomas.set_target<robomaster::position>(id,0);
     }
 
+    can_callback_thread.start(&can_callback_loop);
 
     while(true) {
         if(!queue.empty()) {
             CANMessage msg;
             queue.pop(msg);
-            printf("%d\n",msg.id);
             switch(msg.id) {
                 case 0x000:
                     if(msg.len == 1) {
@@ -45,36 +45,51 @@ int main() {
             }
         }
 
-        // for(int i = 0; i < 4; i++) {
-        //     float angle_pos,rpm;
-        //     angle_pos = 0;
-        //     rpm = 0;
-        //     robomas.set_target<robomaster::position>(i  , angle_pos);
-        //     robomas.set_target<robomaster::speed>   (i+4, rpm);
-        //     printf("%3d ",(int)angle_pos*10);
-        // }
-        // printf("\n");
 
-        // if(!button) {
-        //     for(int id = 0; id < 8; id++) {
-        //         robomas.set_emg(id, true);
-        //     }
-        //     printf("%1.5f  %1.5f  %1.5f  %1.5f\n",
-        //         robomas.get_position(0),
-        //         robomas.get_position(1),
-        //         robomas.get_position(2),
-        //         robomas.get_position(3));
-        // } else {
-        //     for(int id = 0; id < 8; id++) {
-        //         robomas.set_emg(id, false);
-        //     }
-        // }
-        printf("emg: %d, reset: %d, x: %2.5f, y: %2.5f, z: %2.5f\n",
-            canmsg.data.emg,
-            canmsg.data.reset,
-            canmsg.x,
-            canmsg.y,
-            canmsg.z);
+        for(int i = 0; i < 4; i++) {
+            float x = canmsg.x;
+            float y = canmsg.y;
+            float z = canmsg.z;
+
+            float pos_x = wheel_positions[i][0];
+            float pos_y = wheel_positions[i][1];
+
+            float vx = x - z * pos_y;
+            float vy = y + z * pos_x;
+
+            float v = sqrtf(vx * vx + vy * vy);
+            float omega = v / (2.0f * M_PI * wheel_radius); // 回転数 [rps]
+            speed[i] = omega * 60.0f; // RPM
+            angle[i] = atan2f(vy, vx); // [rad]
+        }
+
+        if(!button) {
+            for(int id = 0; id < 8; id++) {
+                robomas.set_emg(id, true);
+            }
+
+            while(!button) {    // ボタンが離されるまで待つ
+                robomas.send_current();
+            };
+
+            while(button){  // ボタンが離されてる間
+                printf("%1.5f, %1.5f, %1.5f, %1.5f\n",
+                    robomas.get_position(0),
+                    robomas.get_position(1),
+                    robomas.get_position(2),
+                    robomas.get_position(3));
+                robomas.send_current();
+            }
+
+            // ボタンが再度押された
+
+            for(int id = 0; id < 8; id++) {
+                robomas.set_emg(id, false);
+            }
+            while(!button) {    // ボタンが話されるまで待つ
+                robomas.send_current();
+            };
+        }
         robomas.send_current();
     }
 }
@@ -135,5 +150,19 @@ void can_receive() {
     CANMessage msg;
     if(can.read(msg)) {
         queue.push(msg);
+    }
+}
+
+void can_callback_loop(){
+    while(true){
+        for(int i = 0; i < 4; i++) {
+            CANMessage msg;
+            msg.id = 0x101 + i;
+            msg.len = 8;
+            memcpy(&msg.data[0],&angle[i],sizeof(float));
+            memcpy(&msg.data[4],&speed[i],sizeof(float));
+            can.write(msg);
+            ThisThread::sleep_for(1ms);
+        }
     }
 }

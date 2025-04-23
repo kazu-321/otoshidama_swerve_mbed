@@ -14,12 +14,14 @@ DigitalIn interrupter[4] = {
     PA_10
 };
 Ticker pid_ticker;
+Thread can_callback_thread;
 CircularBuffer<CANMessage,32> queue;
 UnbufferedSerial pc(USBTX,USBRX,115200);
 
 void calculate_pid();
 void reset();
 void can_receive();
+void can_callback_loop();
 
 bool is_resetting[4] = {false};
 float initial_position[4] = {
@@ -28,15 +30,15 @@ float initial_position[4] = {
     -4.127,
      4.297
 };
+float angle[4] = {0,0,0,0};
+float speed[4] = {0,0,0,0};
 int reset_rpm = 1000;
 
 constexpr int delta_t = 10;
-constexpr float pi = 3.141592653589;
+constexpr float M_PI = 3.141592653589793;
 constexpr float max_rpm = 450 * 36.;
 constexpr float wheel_radius = 0.03;
 constexpr float wheel_position = 0.2;
-constexpr float rad_to_pos = 36. / (2. * pi);
-constexpr float ms_to_rpm = 60. / (2. * pi * wheel_radius);
 const float wheel_positions[4][2] = {
     {+ wheel_position, + wheel_position},
     {- wheel_position, + wheel_position},
