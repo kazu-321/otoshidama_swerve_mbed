@@ -63,33 +63,6 @@ int main() {
             angle[i] = atan2f(vy, vx); // [rad]
         }
 
-        if(!button) {
-            for(int id = 0; id < 8; id++) {
-                robomas.set_emg(id, true);
-            }
-
-            while(!button) {    // ボタンが離されるまで待つ
-                robomas.send_current();
-            };
-
-            while(button){  // ボタンが離されてる間
-                printf("%1.5f, %1.5f, %1.5f, %1.5f\n",
-                    robomas.get_position(0),
-                    robomas.get_position(1),
-                    robomas.get_position(2),
-                    robomas.get_position(3));
-                robomas.send_current();
-            }
-
-            // ボタンが再度押された
-
-            for(int id = 0; id < 8; id++) {
-                robomas.set_emg(id, false);
-            }
-            while(!button) {    // ボタンが話されるまで待つ
-                robomas.send_current();
-            };
-        }
         robomas.send_current();
     }
 }
@@ -154,7 +127,28 @@ void can_receive() {
 }
 
 void can_callback_loop(){
+    bool do_setup = false;
+    bool button_flag = false;
     while(true){
+        if(!button) {
+            button_flag = true;
+        } else {
+            if(button_flag) {
+                do_setup = !do_setup;
+                button_flag = false;
+                for(int id = 0; id < 8; id++) {
+                    robomas.set_emg(id, do_setup);
+                }
+            }
+        }
+        if(do_setup) {
+            printf("%1.5f, %1.5f, %1.5f, %1.5f\n",
+                robomas.get_position(0),
+                robomas.get_position(1),
+                robomas.get_position(2),
+                robomas.get_position(3));
+        }
+
         for(int i = 0; i < 4; i++) {
             CANMessage msg;
             msg.id = 0x101 + i;
