@@ -30,6 +30,12 @@ float initial_position[4] = {
     -4.127,
      4.297
 };
+bool reverse_rpm[4] = {
+    false,
+    false,
+    false,
+    false
+};
 float angle[4] = {0,0,0,0};
 float speed[4] = {0,0,0,0};
 int reset_rpm = 1000;

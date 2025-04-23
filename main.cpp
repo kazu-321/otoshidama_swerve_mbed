@@ -61,6 +61,19 @@ int main() {
             float omega = v / (2.0f * M_PI * wheel_radius); // 回転数 [rps]
             speed[i] = omega * 60.0f; // RPM
             angle[i] = atan2f(vy, vx); // [rad]
+
+            float angle_diff = angle[i] - robomas.get_position(i) / 36. * 2 * M_PI;
+            if(angle_diff > M_PI) {
+                angle[i] -= 2 * M_PI;
+                reverse_rpm[i] = !reverse_rpm[i];
+            }
+            if(angle_diff < M_PI) {
+                angle[i] += 2 * M_PI;
+                reverse_rpm[i] = !reverse_rpm[i];
+            }
+            if(reverse_rpm[i]) {
+                speed[i] *= -1;
+            }
         }
 
         robomas.send_current();
