@@ -59,14 +59,20 @@ int main() {
             float pos_x = wheel_positions[i][0];
             float pos_y = wheel_positions[i][1];
 
-            float vx = x - z * pos_y;
-            float vy = y + z * pos_x;
+            float vx, vy;
+            if(x==0 && y==0 && z==0) {
+                vx = - pos_y;
+                vy = + pos_x;
+                speed[i] = 0;
+            } else {
+                vx = x - z * pos_y;
+                vy = y + z * pos_x;
+                float v = sqrt(vx * vx + vy * vy);
+                float omega = v / (2.0f * M_PI * wheel_radius); // 回転数 [rps]
+                speed[i] = omega * 60.0f; // RPM
+            }
 
-            float v = sqrt(vx * vx + vy * vy);
-            float omega = v / (2.0f * M_PI * wheel_radius); // 回転数 [rps]
-            speed[i] = omega * 60.0f; // RPM
             float target_angle = atan2(vy, vx); // [rad]
-
             angle[i] = optimize_angle(target_angle, last_angle[i]);
 
             robomas.set_target<robomaster::position>(i, angle[i] / M_PI / 2. *36.);
@@ -82,6 +88,7 @@ int main() {
 
 
         robomas.send_current();
+        ThisThread::sleep_for(10ms);
     }
 }
 
