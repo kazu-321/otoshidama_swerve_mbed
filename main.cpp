@@ -45,6 +45,11 @@ int main() {
             }
         }
 
+        if(canmsg.data.reset) {
+            reset();
+            canmsg.data.reset = false;
+        }
+
 
         for(int i = 0; i < 4; i++) {
             float x = canmsg.x;
@@ -57,24 +62,24 @@ int main() {
             float vx = x - z * pos_y;
             float vy = y + z * pos_x;
 
-            float v = sqrtf(vx * vx + vy * vy);
+            float v = sqrt(vx * vx + vy * vy);
             float omega = v / (2.0f * M_PI * wheel_radius); // 回転数 [rps]
             speed[i] = omega * 60.0f; // RPM
-            angle[i] = atan2f(vy, vx); // [rad]
+            float target_angle = atan2(vy, vx); // [rad]
 
-            float angle_diff = angle[i] - robomas.get_position(i) / 36. * 2 * M_PI;
-            if(angle_diff > M_PI) {
-                angle[i] -= 2 * M_PI;
-                reverse_rpm[i] = !reverse_rpm[i];
-            }
-            if(angle_diff < M_PI) {
-                angle[i] += 2 * M_PI;
-                reverse_rpm[i] = !reverse_rpm[i];
-            }
-            if(reverse_rpm[i]) {
-                speed[i] *= -1;
-            }
+            angle[i] = optimize_angle(target_angle, last_angle[i]);
+
+            robomas.set_target<robomaster::position>(i, angle[i] / M_PI / 2. *36.);
+            robomas.set_target<robomaster::speed>(i+4,  speed[i] * 36.);
+
+            last_angle[i] = angle[i];
         }
+
+
+        for(int id = 0; id < 8; id++) {
+            robomas.set_emg(id, canmsg.data.emg);
+        }
+
 
         robomas.send_current();
     }
@@ -121,6 +126,7 @@ void reset() {
                             robomas.get_position(i)+initial_position[i]);
                         is_resetting[i] = false;
                         robomas.set_control_type(i, robomaster::position);
+                        printf("reset %d\n",i);
                     }
                 }
             } else {
@@ -130,6 +136,7 @@ void reset() {
         }
         robomas.send_current();
     }
+    printf("reset end \n");
 }
 
 void can_receive() {
@@ -171,5 +178,12 @@ void can_callback_loop(){
             can.write(msg);
             ThisThread::sleep_for(1ms);
         }
+        ThisThread::sleep_for(10ms);
     }
+}
+
+float optimize_angle(float target, float last) {
+    while(target - last > +M_PI) target -= 2*M_PI;
+    while(target - last < -M_PI) target += 2*M_PI;
+    return target;
 }

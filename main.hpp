@@ -22,6 +22,7 @@ void calculate_pid();
 void reset();
 void can_receive();
 void can_callback_loop();
+float optimize_angle(float target,float last);
 
 bool is_resetting[4] = {false};
 float initial_position[4] = {
@@ -37,10 +38,11 @@ bool reverse_rpm[4] = {
     false
 };
 float angle[4] = {0,0,0,0};
+float last_angle[4] = {0,0,0,0};
 float speed[4] = {0,0,0,0};
 int reset_rpm = 1000;
 
-constexpr int delta_t = 10;
+constexpr int delta_t = 20;
 constexpr float M_PI = 3.141592653589793;
 constexpr float max_rpm = 450 * 36.;
 constexpr float wheel_radius = 0.03;
